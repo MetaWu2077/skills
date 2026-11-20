@@ -73,57 +73,55 @@
       }
     },
     alignHeadings(_camera) {
-      if (!tiangong?.visible) {
-        return;
-      }
-      const uDeg = lastState?.tiangongU;
-      if (!Number.isFinite(Number(uDeg))) {
-        return;
-      }
-      const deltaDeg = 0.75;
-      const before = orbitPosition(
-        uDeg - deltaDeg,
-        missionConfig.inclinationDeg,
-        missionConfig.raanDeg,
-        missionConfig.orbitRadius
-      );
-      const after = orbitPosition(
-        uDeg + deltaDeg,
-        missionConfig.inclinationDeg,
-        missionConfig.raanDeg,
-        missionConfig.orbitRadius
-      );
-      const tangent = after.sub(before);
-      if (tangent.lengthSq() < 1e-12) {
-        return;
-      }
-      tangent.normalize();
-      const radial = tiangong.position.clone();
-      if (radial.lengthSq() < 1e-12) {
-        return;
-      }
-      radial.normalize();
-      const xAxis = tangent;
-      const yAxis = new THREE.Vector3().crossVectors(radial, xAxis);
-      if (yAxis.lengthSq() < 1e-12) {
-        yAxis.set(0, 1, 0).cross(xAxis);
-      }
-      yAxis.normalize();
-      const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
-      const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-      const headOffsetRad = tiangong.userData.headOffsetRad || 0;
-      const headOffset = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 0, 1),
-        headOffsetRad
-      );
-      const attitude = new THREE.Quaternion()
-        .setFromRotationMatrix(basis)
-        .multiply(headOffset);
-      const billboard = tiangong.userData.billboard;
-      if (billboard && !billboard.isSprite) {
-        billboard.quaternion.copy(attitude);
-      }
-      if (tiangong.userData.model) {
-        tiangong.userData.model.quaternion.copy(attitude);
-      }
+      const apply = (craft, uDeg) => {
+        if (!craft?.visible || !Number.isFinite(Number(uDeg))) {
+          return;
+        }
+        const deltaDeg = 0.75;
+        const before = orbitPosition(
+          uDeg - deltaDeg,
+          missionConfig.inclinationDeg,
+          missionConfig.raanDeg,
+          missionConfig.orbitRadius
+        );
+        const after = orbitPosition(
+          uDeg + deltaDeg,
+          missionConfig.inclinationDeg,
+          missionConfig.raanDeg,
+          missionConfig.orbitRadius
+        );
+        const tangent = after.sub(before);
+        if (tangent.lengthSq() < 1e-12) {
+          return;
+        }
+        tangent.normalize();
+        const radial = craft.position.clone();
+        if (radial.lengthSq() < 1e-12) {
+          return;
+        }
+        radial.normalize();
+        const yAxis = new THREE.Vector3().crossVectors(radial, tangent);
+        if (yAxis.lengthSq() < 1e-12) {
+          yAxis.set(0, 1, 0).cross(tangent);
+        }
+        yAxis.normalize();
+        const zAxis = new THREE.Vector3().crossVectors(tangent, yAxis).normalize();
+        const basis = new THREE.Matrix4().makeBasis(tangent, yAxis, zAxis);
+        const headOffset = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          craft.userData.headOffsetRad || 0
+        );
+        const attitude = new THREE.Quaternion()
+          .setFromRotationMatrix(basis)
+          .multiply(headOffset);
+        const billboard = craft.userData.billboard;
+        if (billboard && !billboard.isSprite) {
+          billboard.quaternion.copy(attitude);
+        }
+        if (craft.userData.model) {
+          craft.userData.model.quaternion.copy(attitude);
+        }
+      };
+      apply(tiangong, lastState?.tiangongU);
+      apply(shenzhou, lastState?.shenzhouU);
     },
