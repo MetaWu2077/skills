@@ -54,6 +54,40 @@ LOOP_PATCH = """  if (elapsedMs >= TIMELINE_DURATION_MS) {
     timelinePlaying = false;
   }"""
 
+CLOSEUP_CAMERA_NEEDLE = """  const lookBlend =
+    timeMs <= CAMERA_INTRO_DURATION_MS
+      ? 0.22 + introProgress * 0.18
+      : THREE.MathUtils.lerp(0.4, 0.82, Math.min(1, chaseProgress * 1.1 + closeup * 0.3));
+  cameraLookTarget.copy(cameraGlobeCenter).lerp(cameraFocusLocal, lookBlend);
+
+  const offset = cameraFocusLocal.clone().sub(cameraGlobeCenter);
+  if (offset.lengthSq() < 0.000001) {
+    offset.set(0.15, 0.35, 1);
+  }
+  offset.normalize();
+  const cameraOffset = offset.clone();
+  cameraOffset.y += 0.18;"""
+
+CLOSEUP_CAMERA_PATCH = """  const closeupEase = easeInOutCubic(closeup);
+  const chaseLook = THREE.MathUtils.lerp(
+    0.4,
+    0.82,
+    Math.min(1, chaseProgress * 1.1)
+  );
+  const lookBlend =
+    timeMs <= CAMERA_INTRO_DURATION_MS
+      ? 0.22 + introProgress * 0.18
+      : THREE.MathUtils.lerp(chaseLook, 1, closeupEase);
+  cameraLookTarget.copy(cameraGlobeCenter).lerp(cameraFocusLocal, lookBlend);
+
+  const offset = cameraFocusLocal.clone().sub(cameraGlobeCenter);
+  if (offset.lengthSq() < 0.000001) {
+    offset.set(0.15, 0.35, 1);
+  }
+  offset.normalize();
+  const cameraOffset = offset.clone();
+  cameraOffset.y += THREE.MathUtils.lerp(0.18, 0, closeupEase);"""
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Orbit playground local server")
@@ -104,6 +138,8 @@ def patch_index_js(source: str, host_tail: str) -> str:
         text = text.replace(LOOP_NEEDLE, LOOP_PATCH, 1)
     if "alignHeadings" not in text and RENDER_SCENE_NEEDLE in text:
         text = text.replace(RENDER_SCENE_NEEDLE, RENDER_SCENE_PATCH, 1)
+    if CLOSEUP_CAMERA_NEEDLE in text:
+        text = text.replace(CLOSEUP_CAMERA_NEEDLE, CLOSEUP_CAMERA_PATCH, 1)
     if "installOrbitPlaygroundHost" not in text:
         text = text.rstrip() + "\n" + host_tail
     return text
