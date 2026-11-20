@@ -197,6 +197,11 @@ class PlaygroundHandler(BaseHTTPRequestHandler):
             candidate = PUBLIC / rel.removeprefix("playground/")
             return candidate if candidate.is_file() else None
 
+        if rel == "src/cz2fLaunch.js":
+            overlay = PUBLIC / "cz2fLaunch.js"
+            if overlay.is_file():
+                return overlay
+
         name = Path(rel).name
         if (
             self.sprites_dir
