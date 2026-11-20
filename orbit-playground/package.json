@@ -1,0 +1,9 @@
+{
+  "name": "orbit-playground",
+  "private": true,
+  "description": "Local browser playground for the Shenzhou / Tiangong Three.js Earth scene.",
+  "scripts": {
+    "start": "python3 serve.py",
+    "serve": "python3 serve.py"
+  }
+}
