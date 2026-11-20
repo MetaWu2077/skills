@@ -72,3 +72,72 @@
         craft.userData.billboard.visible = true;
       }
     },
+    alignHeadings(camera) {
+      if (!camera || !tiangong?.visible) {
+        return;
+      }
+      const uDeg = lastState?.tiangongU;
+      if (!Number.isFinite(Number(uDeg))) {
+        return;
+      }
+      const deltaDeg = 0.75;
+      const before = orbitPosition(
+        uDeg - deltaDeg,
+        missionConfig.inclinationDeg,
+        missionConfig.raanDeg,
+        missionConfig.orbitRadius
+      );
+      const after = orbitPosition(
+        uDeg + deltaDeg,
+        missionConfig.inclinationDeg,
+        missionConfig.raanDeg,
+        missionConfig.orbitRadius
+      );
+      const tangentLocal = after.sub(before);
+      if (tangentLocal.lengthSq() < 1e-12) {
+        return;
+      }
+      tangentLocal.normalize();
+      const parent = tiangong.parent;
+      parent.updateWorldMatrix(true, false);
+      const origin = tiangong.position.clone();
+      const tip = origin.clone().add(tangentLocal);
+      parent.localToWorld(origin);
+      parent.localToWorld(tip);
+      const tangentWorld = tip.sub(origin);
+      if (tangentWorld.lengthSq() < 1e-12) {
+        return;
+      }
+      tangentWorld.normalize();
+      camera.updateMatrixWorld();
+      const camRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const camUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+      const camBack = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2);
+      const projected = tangentWorld
+        .clone()
+        .addScaledVector(camBack, -tangentWorld.dot(camBack));
+      if (projected.lengthSq() < 1e-12) {
+        return;
+      }
+      projected.normalize();
+      const heading = Math.atan2(projected.dot(camRight), projected.dot(camUp));
+      const billboard = tiangong.userData.billboard;
+      if (billboard?.isSprite && billboard.material) {
+        billboard.material.rotation = heading;
+      }
+      if (tiangong.userData.model) {
+        const radial = tiangong.getWorldPosition(new THREE.Vector3()).normalize();
+        const yAxis = radial
+          .clone()
+          .addScaledVector(tangentWorld, -radial.dot(tangentWorld));
+        if (yAxis.lengthSq() < 1e-12) {
+          yAxis.set(0, 1, 0);
+        }
+        yAxis.normalize();
+        const zAxis = new THREE.Vector3().crossVectors(tangentWorld, yAxis).normalize();
+        yAxis.crossVectors(zAxis, tangentWorld).normalize();
+        const basis = new THREE.Matrix4().makeBasis(tangentWorld, yAxis, zAxis);
+        const parentInverse = new THREE.Matrix4().copy(parent.matrixWorld).invert();
+        tiangong.quaternion.setFromRotationMatrix(parentInverse.multiply(basis));
+      }
+    },

@@ -36,6 +36,15 @@ LOOP_NEEDLE = """  if (elapsedMs >= TIMELINE_DURATION_MS) {
     timelinePlaying = false;
   }"""
 
+RENDER_SCENE_NEEDLE = """function renderScene() {
+  lighting.update();
+"""
+
+RENDER_SCENE_PATCH = """function renderScene() {
+  lighting.update();
+  mission.alignHeadings?.(camera);
+"""
+
 LOOP_PATCH = """  if (elapsedMs >= TIMELINE_DURATION_MS) {
     if (typeof playgroundLoop !== "undefined" && playgroundLoop) {
       timelineStartTime = now;
@@ -93,6 +102,8 @@ def patch_index_js(source: str, host_tail: str) -> str:
         text = text.replace(START_INTRO_NEEDLE, START_INTRO_PATCH, 1)
     if LOOP_NEEDLE in text:
         text = text.replace(LOOP_NEEDLE, LOOP_PATCH, 1)
+    if "alignHeadings" not in text and RENDER_SCENE_NEEDLE in text:
+        text = text.replace(RENDER_SCENE_NEEDLE, RENDER_SCENE_PATCH, 1)
     if "installOrbitPlaygroundHost" not in text:
         text = text.rstrip() + "\n" + host_tail
     return text
