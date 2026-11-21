@@ -1,0 +1,201 @@
+html.orbit-playground-on,
+html.orbit-playground-on body {
+  overflow: hidden;
+}
+
+html.orbit-playground-on #app {
+  width: calc(100% - 340px);
+  height: 100%;
+  place-items: center;
+  background: #000;
+}
+
+html.orbit-playground-on .preview-shell {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  background: #000;
+}
+
+html.orbit-playground-on body[data-aspect="16x9"] .preview-shell {
+  width: min(100%, calc(100vh * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+html.orbit-playground-on body[data-aspect="9x16"] .preview-shell {
+  width: auto;
+  height: min(100%, 100%);
+  max-height: 100%;
+  aspect-ratio: 9 / 16;
+}
+
+html.orbit-playground-on .render-panel,
+html.orbit-playground-on .camera-controls,
+html.orbit-playground-on .camera-frame {
+  display: none !important;
+}
+
+html.orbit-playground-on .mission-hud {
+  left: 3%;
+  bottom: 4%;
+  width: min(38%, 420px);
+  padding: 10px 12px 12px;
+}
+
+html.orbit-playground-on .mission-hud__kicker {
+  font-size: 11px;
+}
+
+html.orbit-playground-on .mission-hud__title {
+  font-size: 15px;
+}
+
+html.orbit-playground-on .mission-hud__orbits {
+  font-size: 22px;
+}
+
+html.orbit-playground-on .mission-hud__orbits-suffix,
+html.orbit-playground-on .mission-hud__meta,
+html.orbit-playground-on .mission-hud__status {
+  font-size: 12px;
+}
+
+.orbit-playground {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  height: 100%;
+  padding: 16px 16px 20px;
+  overflow: auto;
+  color: #e8eef7;
+  background: #10151c;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.orbit-playground h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.orbit-playground .sub {
+  margin: 0 0 16px;
+  color: #9aa8b8;
+  font-size: 12px;
+}
+
+.orbit-playground fieldset {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.orbit-playground legend {
+  padding: 0 6px;
+  color: #c9d6e6;
+  font-weight: 650;
+}
+
+.orbit-playground .row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.orbit-playground label {
+  color: #d5deea;
+}
+
+.orbit-playground input[type="range"] {
+  width: 100%;
+  accent-color: #f5c451;
+}
+
+.orbit-playground output,
+.orbit-playground .value {
+  min-width: 64px;
+  color: #f5c451;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.orbit-playground .buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.orbit-playground button,
+.orbit-playground .file {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef4ff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.orbit-playground button[aria-pressed="true"],
+.orbit-playground button:hover {
+  background: rgba(245, 196, 81, 0.22);
+  border-color: rgba(245, 196, 81, 0.55);
+}
+
+.orbit-playground .file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-playground .file input {
+  display: none;
+}
+
+.orbit-playground .status {
+  min-height: 1.3em;
+  margin-top: 8px;
+  color: #8fa0b3;
+}
+
+.orbit-playground .status[data-tone="error"] {
+  color: #ff9b9b;
+}
+
+.orbit-playground .preview {
+  display: block;
+  width: 100%;
+  max-height: 72px;
+  margin-top: 8px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+}
+
+.orbit-playground select {
+  width: 100%;
+  min-height: 32px;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #0c1117;
+  color: #eef4ff;
+}
+
+.orbit-playground .check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
