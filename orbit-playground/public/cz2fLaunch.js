@@ -3,9 +3,12 @@ import * as THREE from "three";
 import { latLonToVector3 } from "./geo.js";
 
 export const LAUNCH_DURATION_MS = 36000;
-export const LAUNCH_END_DISTANCE = 3.15;
-export const LAUNCH_END_LOOK_BLEND = 0.22;
-export const LAUNCH_END_Y_BIAS = 0.18;
+export const INSERTION_CAMERA_DISTANCE = 2.15;
+export const INSERTION_LOOK_BLEND = 0.4;
+export const INSERTION_Y_BIAS = 0.18;
+export const LAUNCH_END_DISTANCE = INSERTION_CAMERA_DISTANCE;
+export const LAUNCH_END_LOOK_BLEND = INSERTION_LOOK_BLEND;
+export const LAUNCH_END_Y_BIAS = INSERTION_Y_BIAS;
 
 export const LAUNCH_EVENTS = [
   {
@@ -86,7 +89,7 @@ export const LAUNCH_EVENTS = [
     clock1: 560,
     kicker: "长征二号F · T+8 min 40 s",
     title: "太阳翼展开",
-    status: "太阳翼展开，镜头拉远接入在轨段",
+    status: "太阳翼展开，飞船进入入轨点",
   },
 ];
 
@@ -103,6 +106,7 @@ const FLAME_OUTER = 0xff6a1a;
 
 const Y_UP = new THREE.Vector3(0, 1, 0);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const _slerpAxis = new THREE.Vector3();
 
 function mat(color, extra = {}) {
   return new THREE.MeshBasicMaterial({ color, ...extra });
@@ -169,13 +173,28 @@ function sepAmount(local) {
 }
 
 export function launchOrbitBlend(progress) {
-  return THREE.MathUtils.smootherstep(THREE.MathUtils.clamp(progress, 0, 1), 0.58, 1);
+  return THREE.MathUtils.smootherstep(THREE.MathUtils.clamp(progress, 0, 1), 0.72, 1);
+}
+
+function slerpDir(out, from, to, amount) {
+  const t = THREE.MathUtils.clamp(amount, 0, 1);
+  const angle = from.angleTo(to);
+  if (angle < 1e-5) {
+    return out.copy(from);
+  }
+  _slerpAxis.copy(from).cross(to);
+  if (_slerpAxis.lengthSq() < 1e-10) {
+    return out.copy(t < 0.5 ? from : to).normalize();
+  }
+  _slerpAxis.normalize();
+  return out.copy(from).applyAxisAngle(_slerpAxis, angle * t).normalize();
 }
 
 export function createCz2fLaunch({
   padLatitude = 40.958,
   padLongitude = 100.291,
   insertionPoint,
+  orbitRadius = 1.144,
 } = {}) {
   const group = new THREE.Group();
   group.name = "CZ-2F launch";
@@ -185,7 +204,8 @@ export function createCz2fLaunch({
   const padNormal = pad.clone().normalize();
   const insertion =
     insertionPoint?.clone?.() ||
-    latLonToVector3(padLatitude + 8, padLongitude + 6, 1.04);
+    latLonToVector3(padLatitude + 8, padLongitude + 6, orbitRadius);
+  const insertDir = insertion.clone().normalize();
   const pitchDir = insertion.clone().sub(pad);
   pitchDir.addScaledVector(padNormal, -pitchDir.dot(padNormal));
   if (pitchDir.lengthSq() < 1e-8) {
@@ -430,13 +450,9 @@ export function createCz2fLaunch({
     resetPose();
 
     const climb = THREE.MathUtils.smoothstep(t, 0.018, 1);
-    const altitude = 1.0034 + 0.108 * climb ** 1.12;
-    const pitch = THREE.MathUtils.smootherstep(t, 0.1, 0.72) * 1.22;
-    axisDir
-      .copy(padNormal)
-      .multiplyScalar(Math.cos(pitch))
-      .addScaledVector(pitchDir, Math.sin(pitch))
-      .normalize();
+    const altitude = THREE.MathUtils.lerp(1.0034, orbitRadius, climb ** 1.08);
+    const turn = THREE.MathUtils.smootherstep(t, 0.1, 0.98);
+    slerpDir(axisDir, padNormal, insertDir, turn);
     vehiclePos.copy(axisDir).multiplyScalar(altitude);
     quat.setFromUnitVectors(Y_UP, axisDir);
     vehicle.position.copy(vehiclePos);
@@ -501,24 +517,40 @@ export function createCz2fLaunch({
     panelR.rotation.z = THREE.MathUtils.lerp(-1.32, 0, arrays);
     panelL.scale.set(THREE.MathUtils.lerp(0.18, 1, arrays), 1, 1);
     panelR.scale.set(THREE.MathUtils.lerp(0.18, 1, arrays), 1, 1);
+    shenzhouMini.visible = t < 0.97;
 
-    const fade = 1 - THREE.MathUtils.smoothstep(t, 0.9, 1);
-    group.visible = fade > 0.02;
-    padDisc.visible = fade > 0.35;
+    padDisc.visible = t < 0.55;
+    const hideStack = eventLocal(t, "arrays") > 0.85;
+    if (hideStack) {
+      core.visible = false;
+      second.visible = false;
+      tower.visible = false;
+      boosters.forEach((booster) => {
+        booster.visible = false;
+      });
+    }
 
     const follow = vehiclePos.clone();
     if (craftSep > 0.05) {
       follow.addScaledVector(axisDir, craftSep * 0.04);
     }
-    const camDist = THREE.MathUtils.lerp(0.108, 0.92, THREE.MathUtils.smootherstep(t, 0, 0.72));
-    cameraLocal.up.copy(padNormal);
-    cameraLocal.target.copy(follow);
-    cameraLocal.position
-      .copy(follow)
+    const camDist = THREE.MathUtils.lerp(0.108, 0.42, THREE.MathUtils.smootherstep(t, 0, 0.7));
+    const closePos = follow.clone()
       .addScaledVector(profileSide, camDist)
-      .addScaledVector(padNormal, THREE.MathUtils.lerp(0.006, 0.04, t));
-
+      .addScaledVector(padNormal, 0.008);
+    const chaseOffset = follow.clone();
+    if (chaseOffset.lengthSq() < 1e-12) {
+      chaseOffset.copy(padNormal);
+    }
+    chaseOffset.normalize();
+    chaseOffset.y += INSERTION_Y_BIAS;
+    chaseOffset.normalize();
+    const chasePos = chaseOffset.multiplyScalar(INSERTION_CAMERA_DISTANCE);
+    const chaseLook = follow.clone().multiplyScalar(INSERTION_LOOK_BLEND);
     orbitBlend = launchOrbitBlend(t);
+    cameraLocal.position.copy(closePos).lerp(chasePos, orbitBlend);
+    cameraLocal.target.copy(follow).lerp(chaseLook, orbitBlend);
+    cameraLocal.up.copy(padNormal).lerp(WORLD_UP, orbitBlend).normalize();
   }
 
   resetPose();
