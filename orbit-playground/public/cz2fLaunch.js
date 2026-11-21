@@ -2,68 +2,91 @@ import * as THREE from "three";
 
 import { latLonToVector3 } from "./geo.js";
 
-export const LAUNCH_DURATION_MS = 18500;
+export const LAUNCH_DURATION_MS = 36000;
+export const LAUNCH_END_DISTANCE = 3.15;
+export const LAUNCH_END_LOOK_BLEND = 0.22;
+export const LAUNCH_END_Y_BIAS = 0.18;
 
 export const LAUNCH_EVENTS = [
   {
     id: "liftoff",
     start: 0,
-    end: 0.19,
+    end: 0.1,
     clock0: 0,
-    clock1: 12,
+    clock1: 18,
     kicker: "长征二号F · 酒泉",
     title: "点火起飞",
-    status: "神舟24号随火箭离开发射台",
+    status: "火箭垂直离开发射台，地平线保持水平",
   },
   {
-    id: "tower",
-    start: 0.19,
-    end: 0.36,
-    clock0: 120,
-    clock1: 128,
-    kicker: "长征二号F · T+2 min",
-    title: "逃逸塔分离",
-    status: "逃逸塔向前抛离，整流罩暴露",
+    id: "pitch",
+    start: 0.1,
+    end: 0.2,
+    clock0: 25,
+    clock1: 90,
+    kicker: "长征二号F · 程序转弯",
+    title: "程序转弯",
+    status: "从垂直逐渐低头，转入入轨方向",
+  },
+  {
+    id: "boosters",
+    start: 0.2,
+    end: 0.34,
+    clock0: 150,
+    clock1: 158,
+    kicker: "长征二号F · T+2 min 35 s",
+    title: "助推器分离",
+    status: "四枚助推器向外抛离，芯级继续爬升",
   },
   {
     id: "stage",
-    start: 0.36,
-    end: 0.55,
-    clock0: 155,
-    clock1: 166,
+    start: 0.34,
+    end: 0.48,
+    clock0: 160,
+    clock1: 172,
     kicker: "长征二号F · T+2 min 40 s",
     title: "一二级分离",
-    status: "一级与助推器脱落，二级继续加速",
+    status: "一级芯级脱落，二级点火继续加速",
   },
   {
     id: "fairing",
-    start: 0.55,
-    end: 0.74,
+    start: 0.48,
+    end: 0.62,
     clock0: 198,
-    clock1: 210,
+    clock1: 214,
     kicker: "长征二号F · T+3 min 20 s",
     title: "整流罩抛离",
     status: "整流罩对开抛掉，飞船露出来",
   },
   {
+    id: "cutoff",
+    start: 0.62,
+    end: 0.73,
+    clock0: 470,
+    clock1: 486,
+    kicker: "长征二号F · T+7 min 50 s",
+    title: "二级关机",
+    status: "二级主机关机，进入滑行段",
+  },
+  {
     id: "sep",
-    start: 0.74,
-    end: 0.93,
+    start: 0.73,
+    end: 0.85,
     clock0: 490,
-    clock1: 505,
+    clock1: 508,
     kicker: "长征二号F · T+8 min 10 s",
     title: "飞船分离",
     status: "神舟24号离开二级火箭",
   },
   {
-    id: "cut",
-    start: 0.93,
+    id: "arrays",
+    start: 0.85,
     end: 1,
-    clock0: 512,
-    clock1: 520,
-    kicker: "长征二号F · 切入",
-    title: "转入在轨段",
-    status: "飞船分离完成，切入酒泉入轨剖面",
+    clock0: 520,
+    clock1: 560,
+    kicker: "长征二号F · T+8 min 40 s",
+    title: "太阳翼展开",
+    status: "太阳翼展开，镜头拉远接入在轨段",
   },
 ];
 
@@ -74,10 +97,12 @@ const DARK = 0x2a2e34;
 const NOZZLE = 0x14171c;
 const METAL = 0x8d949c;
 const GREEN = 0x5a6b4a;
+const PANEL = 0x2a4d9c;
 const FLAME_CORE = 0xfff2b0;
 const FLAME_OUTER = 0xff6a1a;
 
 const Y_UP = new THREE.Vector3(0, 1, 0);
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 function mat(color, extra = {}) {
   return new THREE.MeshBasicMaterial({ color, ...extra });
@@ -119,8 +144,8 @@ export function launchHud(progress) {
     kicker: event.kicker,
     title: event.title,
     orbits: formatTPlus(clock),
-    orbitsSuffix: event.id === "cut" ? "切入轨道剖面" : "发射段 · 长征二号F",
-    meta: `${event.status}`,
+    orbitsSuffix: event.id === "arrays" ? "接入在轨剖面" : "发射段 · 长征二号F",
+    meta: event.status,
     status: event.status,
     progress: progress * 0.18,
     eventId: event.id,
@@ -140,7 +165,11 @@ function eventLocal(progress, id) {
 }
 
 function sepAmount(local) {
-  return THREE.MathUtils.smoothstep(local, 0, 0.38);
+  return THREE.MathUtils.smoothstep(local, 0.06, 0.58);
+}
+
+export function launchOrbitBlend(progress) {
+  return THREE.MathUtils.smootherstep(THREE.MathUtils.clamp(progress, 0, 1), 0.58, 1);
 }
 
 export function createCz2fLaunch({
@@ -163,6 +192,15 @@ export function createCz2fLaunch({
     pitchDir.set(0, 0, 1);
   }
   pitchDir.normalize();
+
+  const profileSide = new THREE.Vector3().crossVectors(padNormal, pitchDir);
+  if (profileSide.lengthSq() < 1e-8) {
+    profileSide.crossVectors(padNormal, WORLD_UP);
+  }
+  if (profileSide.lengthSq() < 1e-8) {
+    profileSide.set(1, 0, 0);
+  }
+  profileSide.normalize();
 
   const padDisc = new THREE.Mesh(
     new THREE.CircleGeometry(0.018, 40),
@@ -209,7 +247,6 @@ export function createCz2fLaunch({
       0,
       Math.sin(angle) * 0.125 * S
     );
-    core.add(booster);
     return booster;
   });
 
@@ -274,7 +311,17 @@ export function createCz2fLaunch({
   returnCap.position.y = 0.77 * S;
   const service = cyl(0.038 * S, 0.04 * S, 0.05 * S, GREEN, 16);
   service.position.y = 0.73 * S;
-  shenzhouMini.add(orbital, returnCap, service);
+  const panelL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14 * S, 0.004 * S, 0.048 * S),
+    mat(PANEL)
+  );
+  const panelR = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14 * S, 0.004 * S, 0.048 * S),
+    mat(PANEL)
+  );
+  panelL.position.set(-0.04 * S, 0.73 * S, 0);
+  panelR.position.set(0.04 * S, 0.73 * S, 0);
+  shenzhouMini.add(orbital, returnCap, service, panelL, panelR);
 
   const flame1 = new THREE.Mesh(
     new THREE.ConeGeometry(0.055 * S, 0.16 * S, 12, 1, true),
@@ -318,18 +365,18 @@ export function createCz2fLaunch({
 
   const vehicle = new THREE.Group();
   vehicle.name = "cz2f-vehicle";
-  vehicle.add(core, second, fairingL, fairingR, fairingCap, tower, shenzhouMini);
+  vehicle.add(core, second, fairingL, fairingR, fairingCap, tower, shenzhouMini, ...boosters);
   group.add(vehicle);
 
   const cameraLocal = {
     position: new THREE.Vector3(),
     target: new THREE.Vector3(),
+    up: new THREE.Vector3(),
   };
   const axisDir = new THREE.Vector3();
   const vehiclePos = new THREE.Vector3();
   const quat = new THREE.Quaternion();
-  const side = new THREE.Vector3();
-  const worldUp = new THREE.Vector3(0, 1, 0);
+  let orbitBlend = 0;
 
   const rest = {
     core: core.position.clone(),
@@ -360,6 +407,7 @@ export function createCz2fLaunch({
     boosters.forEach((booster, index) => {
       booster.position.copy(rest.boosters[index]);
       booster.rotation.set(0, 0, 0);
+      booster.visible = true;
     });
     core.visible = true;
     second.visible = true;
@@ -371,15 +419,19 @@ export function createCz2fLaunch({
     flame1.visible = true;
     flame1Core.visible = true;
     flame2.visible = false;
+    panelL.rotation.z = 1.32;
+    panelR.rotation.z = -1.32;
+    panelL.scale.set(0.18, 1, 1);
+    panelR.scale.set(0.18, 1, 1);
   }
 
   function update(progress) {
     const t = THREE.MathUtils.clamp(progress, 0, 1);
     resetPose();
 
-    const climb = THREE.MathUtils.clamp((t - 0.02) / 0.98, 0, 1);
-    const altitude = 1.0032 + 0.082 * climb ** 1.28;
-    const pitch = THREE.MathUtils.lerp(0.04, 0.92, climb ** 1.15);
+    const climb = THREE.MathUtils.smoothstep(t, 0.018, 1);
+    const altitude = 1.0034 + 0.108 * climb ** 1.12;
+    const pitch = THREE.MathUtils.smootherstep(t, 0.1, 0.72) * 1.22;
     axisDir
       .copy(padNormal)
       .multiplyScalar(Math.cos(pitch))
@@ -390,73 +442,83 @@ export function createCz2fLaunch({
     vehicle.position.copy(vehiclePos);
     vehicle.quaternion.copy(quat);
 
-    const towerSep = sepAmount(eventLocal(t, "tower"));
+    const towerSep = THREE.MathUtils.smoothstep(t, 0.14, 0.2);
+    const boosterSep = sepAmount(eventLocal(t, "boosters"));
     const stageSep = sepAmount(eventLocal(t, "stage"));
     const fairingSep = sepAmount(eventLocal(t, "fairing"));
+    const cutoff = eventLocal(t, "cutoff");
     const craftSep = sepAmount(eventLocal(t, "sep"));
-    const hold = eventLocal(t, "cut");
+    const arrays = THREE.MathUtils.smoothstep(eventLocal(t, "arrays"), 0.05, 0.78);
 
-    tower.position.copy(rest.tower).add(new THREE.Vector3(0, towerSep * 1.65 * S, 0));
-    tower.rotation.z = towerSep * 0.15;
-    tower.visible = eventLocal(t, "stage") < 0.2;
+    tower.position.copy(rest.tower).add(new THREE.Vector3(0, towerSep * 1.8 * S, 0));
+    tower.visible = eventLocal(t, "boosters") < 0.15;
 
-    core.position.copy(rest.core).add(new THREE.Vector3(0, -stageSep * 2.2 * S, 0.18 * S * stageSep));
-    core.rotation.z = -stageSep * 0.55;
-    core.rotation.x = stageSep * 0.2;
     boosters.forEach((booster, index) => {
       const angle = (index * Math.PI) / 2;
       booster.position.copy(rest.boosters[index]).add(
         new THREE.Vector3(
-          Math.cos(angle) * stageSep * 1.05 * S,
-          -stageSep * 0.55 * S,
-          Math.sin(angle) * stageSep * 1.05 * S
+          Math.cos(angle) * boosterSep * 1.35 * S,
+          -boosterSep * 0.45 * S,
+          Math.sin(angle) * boosterSep * 1.35 * S
         )
       );
+      booster.rotation.z = Math.cos(angle) * boosterSep * 0.45;
+      booster.visible = eventLocal(t, "stage") < 0.25;
     });
-    flame1.visible = stageSep < 0.55;
+
+    core.position.copy(rest.core).add(new THREE.Vector3(0, -stageSep * 2.35 * S, 0.2 * S * stageSep));
+    core.rotation.z = -stageSep * 0.55;
+    core.rotation.x = stageSep * 0.18;
+    flame1.visible = stageSep < 0.42;
     flame1Core.visible = flame1.visible;
-    flame2.visible = stageSep > 0.12 && craftSep < 0.55;
-    const flicker = 0.88 + Math.sin(t * 90) * 0.12;
+    flame2.visible = stageSep > 0.18 && cutoff < 0.35;
+    const flicker = 0.88 + Math.sin(t * 70) * 0.12;
     flame1.scale.set(flicker, 1 + (1 - flicker) * 0.4, flicker);
     flame2.scale.set(1, 0.85 + flicker * 0.3, 1);
+    if (cutoff > 0.35) {
+      flame2.visible = false;
+    }
 
-    fairingL.position.copy(rest.fairingL).add(new THREE.Vector3(-fairingSep * 1.15 * S, fairingSep * 0.22 * S, 0));
+    fairingL.position.copy(rest.fairingL).add(new THREE.Vector3(-fairingSep * 1.2 * S, fairingSep * 0.22 * S, 0));
     fairingL.rotation.z = fairingSep * 1.05;
-    fairingR.position.copy(rest.fairingR).add(new THREE.Vector3(fairingSep * 1.15 * S, fairingSep * 0.22 * S, 0));
+    fairingR.position.copy(rest.fairingR).add(new THREE.Vector3(fairingSep * 1.2 * S, fairingSep * 0.22 * S, 0));
     fairingR.rotation.z = -fairingSep * 1.05;
-    fairingCap.position.copy(rest.fairingCap).add(new THREE.Vector3(0, fairingSep * 0.9 * S, fairingSep * 0.25 * S));
-    const hideFairing = eventLocal(t, "sep") > 0.12;
+    fairingCap.position.copy(rest.fairingCap).add(new THREE.Vector3(0, fairingSep * 0.95 * S, fairingSep * 0.25 * S));
+    const hideFairing = eventLocal(t, "cutoff") > 0.08;
     fairingL.visible = !hideFairing;
     fairingR.visible = !hideFairing;
     fairingCap.visible = !hideFairing;
 
-    shenzhouMini.position.copy(rest.shenzhou).add(new THREE.Vector3(0, craftSep * 1.85 * S, 0));
-    second.position.copy(rest.second).add(new THREE.Vector3(0.12 * S * craftSep, -craftSep * 1.45 * S, 0));
+    shenzhouMini.position.copy(rest.shenzhou).add(new THREE.Vector3(0, craftSep * 1.9 * S, 0));
+    second.position.copy(rest.second).add(new THREE.Vector3(0.12 * S * craftSep, -craftSep * 1.5 * S, 0));
     second.rotation.z = craftSep * 0.4;
-    if (craftSep > 0.2) {
-      flame2.visible = false;
-    }
-    if (hold > 0.4) {
+    if (eventLocal(t, "arrays") > 0.35) {
       core.visible = false;
       second.visible = false;
     }
 
+    panelL.rotation.z = THREE.MathUtils.lerp(1.32, 0, arrays);
+    panelR.rotation.z = THREE.MathUtils.lerp(-1.32, 0, arrays);
+    panelL.scale.set(THREE.MathUtils.lerp(0.18, 1, arrays), 1, 1);
+    panelR.scale.set(THREE.MathUtils.lerp(0.18, 1, arrays), 1, 1);
+
+    const fade = 1 - THREE.MathUtils.smoothstep(t, 0.9, 1);
+    group.visible = fade > 0.02;
+    padDisc.visible = fade > 0.35;
+
     const follow = vehiclePos.clone();
     if (craftSep > 0.05) {
-      follow.addScaledVector(axisDir, craftSep * 0.035);
+      follow.addScaledVector(axisDir, craftSep * 0.04);
     }
-    side.crossVectors(axisDir, worldUp);
-    if (side.lengthSq() < 1e-6) {
-      side.crossVectors(axisDir, new THREE.Vector3(1, 0, 0));
-    }
-    side.normalize();
-    const camDist = THREE.MathUtils.lerp(0.148, 0.188, t);
+    const camDist = THREE.MathUtils.lerp(0.108, 0.92, THREE.MathUtils.smootherstep(t, 0, 0.72));
+    cameraLocal.up.copy(padNormal);
     cameraLocal.target.copy(follow);
     cameraLocal.position
       .copy(follow)
-      .addScaledVector(side, camDist)
-      .addScaledVector(axisDir, -0.018)
-      .addScaledVector(padNormal, 0.012);
+      .addScaledVector(profileSide, camDist)
+      .addScaledVector(padNormal, THREE.MathUtils.lerp(0.006, 0.04, t));
+
+    orbitBlend = launchOrbitBlend(t);
   }
 
   resetPose();
@@ -470,6 +532,9 @@ export function createCz2fLaunch({
     },
     getCameraLocal() {
       return cameraLocal;
+    },
+    getOrbitBlend() {
+      return orbitBlend;
     },
     setVisible(visible) {
       group.visible = Boolean(visible);
